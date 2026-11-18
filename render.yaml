@@ -1,0 +1,14 @@
+# Render 一键部署配置：登录 render.com 用 GitHub 授权 → New Blueprint → 选本仓库
+services:
+  - type: web
+    name: xiongling-1beta-pro-sm
+    runtime: python
+    plan: free
+    buildCommand: pip install -r api/requirements.txt && python3 train.py --backend numpy --data data/sample.txt --out model --epochs 3
+    startCommand: uvicorn api.server:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: XL_API_KEY
+        value: sk-xionglingautobaiduscshumi
+      - key: PYTHON_VERSION
+        value: 3.12.5
+    healthCheckPath: /health
