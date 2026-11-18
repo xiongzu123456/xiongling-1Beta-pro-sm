@@ -6,6 +6,9 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 
 COPY . /app
 
+# 镜像里没有已训练模型时，构建阶段直接练一个，保证服务启动即有模型
+RUN python3 train.py --backend numpy --data data/sample.txt --out model --epochs 3 || true
+
 ENV XL_API_KEY=sk-xionglingautobaiduscshumi
 ENV PORT=7860
 EXPOSE 7860
