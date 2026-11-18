@@ -1,0 +1,34 @@
+{
+  "model_name": "xiongling-1Beta-pro-sm",
+  "display_name": "XiongLing 1Beta pro sm",
+  "version": "1.0.0-beta",
+  "family": "xiongling",
+  "architecture": "decoder-only-transformer-lora",
+  "base_model": "Qwen/Qwen3-0.6B",
+  "lora": {
+    "r": 16,
+    "alpha": 32,
+    "dropout": 0.05,
+    "target_modules": ["q_proj", "k_proj", "v_proj", "o_proj"]
+  },
+  "training": {
+    "epochs": 3,
+    "batch_size": 1,
+    "grad_accum": 8,
+    "learning_rate": 2e-4,
+    "max_seq_len": 1024,
+    "warmup_ratio": 0.03,
+    "lr_scheduler": "cosine",
+    "precision": "bf16"
+  },
+  "serving": {
+    "api_key_env": "XL_API_KEY",
+    "api_key_default": "sk-xionglingautobaiduscshumi",
+    "endpoints": ["/health", "/v1/models", "/v1/chat/completions", "/v1/generate"],
+    "max_new_tokens": 256
+  },
+  "smoke_test_backend": {
+    "type": "numpy-char-bigram",
+    "description": "无需 GPU 的速测后端，用于验证训练-保存-加载-推理整条链路"
+  }
+}
