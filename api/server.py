@@ -8,7 +8,7 @@
 兼容多种客户端路径：
     OpenAI 风格    POST /v1/chat/completions  或  POST /chat/completions
     Anthropic 风格 POST /v1/messages         或  POST /messages
-    根路径 GET /  给出可用的端点清单（不再 404）
+    根路径 GET /  给出可用的端点清单
 
 启动：uvicorn api.server:app --host 0.0.0.0 --port 8000
 """
@@ -74,7 +74,7 @@ class ChatRequest(BaseModel):
 
 class MsgItem(BaseModel):
     role: str = "user"
-    content: object = ""      # Claude 风格可能是字符串，也可能是 block 列表
+    content: object = ""
 
 
 class MessagesRequest(BaseModel):
@@ -94,7 +94,7 @@ class GenRequest(BaseModel):
 class FileRequest(BaseModel):
     prompt: str
     filename: str = "output"
-    ext: str = "md"          # md / txt / json / html / py
+    ext: str = "md"
     max_tokens: int = 256
     temperature: float = 0.8
 
@@ -130,7 +130,7 @@ def home():
 <title>{MODEL_NAME} API</title>
 <body style="font:15px/1.7 -apple-system,sans-serif;max-width:760px;margin:40px auto;padding:0 18px">
 <h2>{MODEL_NAME} API 在线</h2>
-<p>当前后端：<b>{engine.backend}</b>　状态：<b>ok</b></p>
+<p>当前后端：<b>{engine.active_backend()}</b>（本地：{engine.backend}）　状态：<b>ok</b></p>
 <p>所有 <code>/v1/*</code> 接口都需要 Key（请求头 <code>x-api-key</code> 或 <code>Authorization: Bearer</code>）。</p>
 <ul>{lines}</ul>
 <p>示例：<code>curl -X POST /v1/chat/completions -H "x-api-key: &lt;你的key&gt;" -H "Content-Type: application/json" -d '{{"messages":[{{"role":"user","content":"你好"}}]}}'</code></p>
@@ -144,7 +144,8 @@ def favicon():
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "model": MODEL_NAME, "backend": engine.backend,
+    return {"status": "ok", "model": MODEL_NAME,
+            "backend": engine.active_backend(), "local": engine.backend,
             "time": time.strftime("%Y-%m-%dT%H:%M:%S")}
 
 
@@ -156,8 +157,9 @@ def models(_: bool = Depends(require_key)):
 # ---------------- OpenAI 风格 ----------------
 def _do_chat(req: ChatRequest) -> dict:
     prompt = _flat(req.messages)
+    msgs = [{"role": m.role, "content": m.content} for m in req.messages]
     try:
-        text = engine.generate(prompt, req.max_tokens, req.temperature, req.top_k)
+        text = engine.chat(msgs, req.max_tokens, req.temperature, req.top_k)
     except Exception as e:
         raise HTTPException(status_code=503, detail={"error": str(e)})
     return {
@@ -169,6 +171,7 @@ def _do_chat(req: ChatRequest) -> dict:
                      "message": {"role": "assistant", "content": text}}],
         "usage": {"prompt_tokens": len(prompt), "completion_tokens": len(text),
                   "total_tokens": len(prompt) + len(text)},
+        "provider": engine.active_backend(),
     }
 
 
@@ -186,8 +189,11 @@ def chat_alias(req: ChatRequest, _: bool = Depends(require_key)):
 # ---------------- Anthropic 风格 ----------------
 def _do_messages(req: MessagesRequest) -> dict:
     prompt = _flat(req.messages)
+    msgs = [{"role": m.role, "content": m.content} for m in req.messages]
+    if not isinstance(msgs[0]["content"], str):
+        msgs = [{"role": m.role, "content": _flat([m])} for m in req.messages]
     try:
-        text = engine.generate(prompt, req.max_tokens, req.temperature)
+        text = engine.chat(msgs, req.max_tokens, req.temperature)
     except Exception as e:
         raise HTTPException(status_code=503, detail={"error": str(e)})
     return {
@@ -219,7 +225,8 @@ def generate(req: GenRequest, _: bool = Depends(require_key)):
                                req.temperature, req.top_k)
     except Exception as e:
         raise HTTPException(status_code=503, detail={"error": str(e)})
-    return {"model": MODEL_NAME, "prompt": req.prompt, "text": text}
+    return {"model": MODEL_NAME, "prompt": req.prompt, "text": text,
+            "provider": engine.active_backend()}
 
 
 @app.post("/v1/files")
